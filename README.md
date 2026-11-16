@@ -1,4 +1,4 @@
-# LabFlow - Sistema de Controle de Atendimento
+# LabManager - Sistema de Controle de Atendimento
 
 Sistema web para gerenciamento de filas e controle de atendimentos em laboratórios clínicos. 
 Projeto Final da disciplina de Back End Frameworks - UNINASSAU (Semestre 2026.2).
