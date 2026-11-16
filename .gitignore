@@ -1,0 +1,38 @@
+BACKEND (Python / Flask)
+Ambientes Virtuais
+
+venv/
+env/
+.venv/
+.env
+
+Arquivos compilados e cache do Python
+pycache/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+
+Banco de Dados
+*.db
+*.sqlite3
+labflow.db
+
+
+FRONTEND (node / React)
+node_modules/
+dist/
+build/
+.npm/
+
+
+Variáveis de ambiente locais do Vite
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+
+SISTEMA OPERACIONAL
+.DS_Store
+Thumbs.db
