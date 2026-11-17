@@ -1,7 +1,7 @@
 # LabManager - Sistema de Controle de Atendimento
 
 Sistema web para gerenciamento de filas e controle de atendimentos em laboratórios clínicos. 
-Projeto Final da disciplina de Back End Frameworks - UNINASSAU (Semestre 2026.2).
+Projeto Final da disciplina de Back End/Front end Frameworks - UNINASSAU (Semestre 2026.2).
 
 ## Equipe
 * Eduardo Guilherme - Matrícula: 01802828
