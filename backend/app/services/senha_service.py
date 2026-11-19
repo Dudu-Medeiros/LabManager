@@ -1,11 +1,40 @@
 from datetime import datetime, timezone, timedelta
 from app.models.senha import Senha
 from app.repositories.senha_repository import SenhaRepository
+from app.services.maquina_estados import validar_transicao
 
 TIPOS_VALIDOS = {"SP", "SE", "SG"}
 FUSO_BR = timezone(timedelta(hours=-3))
 
 class SenhaService:
+    @staticmethod
+    def _serializar(senha, incluir_historico=False):
+        dados = {
+            "id": senha.id,
+            "numero": senha.numero,
+            "tipo": senha.tipo,
+            "estado_atual": senha.estado_atual,
+            "data_emissao": senha.data_emissao.isoformat(),
+            "guiche": senha.guiche,
+            "versao": senha.versao,
+            "usuario_id": senha.usuario_id,
+            "fila_id": senha.fila_id,
+            "paciente_id": senha.paciente_id
+        }
+
+        if incluir_historico:
+            dados["historico"] = [
+                {
+                    "id": h.id,
+                    "estado": h.estado,
+                    "data_hora": h.data_hora.isoformat(),
+                    "usuario_id": h.usuario_id
+                }
+                for h in senha.historico
+            ]
+
+        return dados
+
     @staticmethod
     def emitir_senha(tipo, paciente_id=None):
         tipo_normalizado = tipo.strip().upper() if isinstance(tipo, str) else ""
@@ -35,13 +64,33 @@ class SenhaService:
         )
 
         SenhaRepository.criar_com_historico(nova_senha)
+        return SenhaService._serializar(nova_senha), None
 
-        return {
-            "id": nova_senha.id,
-            "numero": nova_senha.numero,
-            "tipo": nova_senha.tipo,
-            "estado_atual": nova_senha.estado_atual,
-            "data_emissao": nova_senha.data_emissao.isoformat(),
-            "fila_id": nova_senha.fila_id,
-            "paciente_id": nova_senha.paciente_id
-        }, None
+    @staticmethod
+    def buscar_por_id(senha_id):
+        senha = SenhaRepository.buscar_por_id(senha_id)
+        if not senha:
+            return None, "Senha não encontrada."
+        return SenhaService._serializar(senha, incluir_historico=True), None
+
+    @staticmethod
+    def transicionar_estado(senha_id, novo_estado, usuario_id, guiche=None):
+        senha = SenhaRepository.buscar_por_id(senha_id)
+        if not senha:
+            return None, "Senha não encontrada.", 404
+
+        if not novo_estado:
+            return None, "Informe o campo 'estado' para realizar a transição.", 400
+
+        valido, estado_normalizado, erro = validar_transicao(senha.estado_atual, novo_estado)
+        if not valido:
+            return None, erro, 422
+
+        senha_atualizada = SenhaRepository.atualizar_estado_com_historico(
+            senha=senha,
+            novo_estado=estado_normalizado,
+            usuario_id=usuario_id,
+            guiche=guiche
+        )
+
+        return SenhaService._serializar(senha_atualizada, incluir_historico=True), None, 200

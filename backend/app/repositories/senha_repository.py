@@ -5,6 +5,10 @@ from app.models.fila import Fila
 
 class SenhaRepository:
     @staticmethod
+    def buscar_por_id(senha_id):
+        return db.session.get(Senha, senha_id)
+
+    @staticmethod
     def buscar_ultima_por_prefixo(prefixo):
         return (
             Senha.query
@@ -20,7 +24,6 @@ class SenhaRepository:
     @staticmethod
     def criar_com_historico(senha):
         db.session.add(senha)
-        # flush gera o senha.id antes do commit para vincular ao historico
         db.session.flush()
 
         historico_inicial = HistoricoEstado(
@@ -29,5 +32,23 @@ class SenhaRepository:
             usuario_id=None
         )
         db.session.add(historico_inicial)
+        db.session.commit()
+        return senha
+
+    @staticmethod
+    def atualizar_estado_com_historico(senha, novo_estado, usuario_id, guiche=None):
+        senha.estado_atual = novo_estado
+        senha.usuario_id = usuario_id
+        senha.versao += 1
+
+        if guiche is not None:
+            senha.guiche = guiche
+
+        registro_historico = HistoricoEstado(
+            senha_id=senha.id,
+            estado=novo_estado,
+            usuario_id=usuario_id
+        )
+        db.session.add(registro_historico)
         db.session.commit()
         return senha
