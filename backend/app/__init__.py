@@ -28,6 +28,10 @@ def create_app(config_class=Config):
         from .models.paciente import Paciente
         from .models.fila import Fila
 
+    # Registra os blueprints de rotas
+    from .routes.auth_routes import auth_bp
+    app.register_blueprint(auth_bp)
+
     # Rota de Health Check para monitoramento e recuperacao de desastres
     @app.route('/health', methods=['GET'])
     def health_check():
