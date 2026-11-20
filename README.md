@@ -6,7 +6,6 @@ Projeto Final da disciplina de Back End/Front end Frameworks - UNINASSAU (Semest
 ## Equipe
 * Eduardo Guilherme - Matrícula: 01802828
 * Bruno André - Matrícula: 01554553
-* [Nome do Integrante 3] - Matrícula: [Matrícula 3]
 
 ## Tecnologias e Versões
 * Backend: Python 3.14+, Flask
