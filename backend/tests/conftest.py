@@ -6,27 +6,46 @@ from app.models.usuario import Usuario
 from config import Config
 
 
-class TestConfig(Config):
-    TESTING = True
-    SQLALCHEMY_DATABASE_URI = "sqlite://"
-    JWT_SECRET_KEY = "chave-de-teste-com-tamanho-suficiente-para-hmac"
+def _config(uri):
+    class TestConfig(Config):
+        TESTING = True
+        SQLALCHEMY_DATABASE_URI = uri
+        JWT_SECRET_KEY = "chave-de-teste-com-tamanho-suficiente-para-hmac"
+    return TestConfig
+
+
+def _popular_usuarios():
+    senha_hash = generate_password_hash("password123")
+    db.session.add_all([
+        Usuario(nome="Atendente", email="atendente@labflow.com", senha_hash=senha_hash, perfil="ATENDENTE"),
+        Usuario(nome="Atendente 2", email="atendente2@labflow.com", senha_hash=senha_hash, perfil="ATENDENTE"),
+        Usuario(nome="Gestor", email="gestor@labflow.com", senha_hash=senha_hash, perfil="GESTOR"),
+    ])
+    db.session.commit()
 
 
 @pytest.fixture()
 def app():
-    app = create_app(TestConfig)
+    app = create_app(_config("sqlite://"))
     with app.app_context():
         db.create_all()
-        senha_hash = generate_password_hash("password123")
-        db.session.add_all([
-            Usuario(nome="Atendente", email="atendente@labflow.com", senha_hash=senha_hash, perfil="ATENDENTE"),
-            Usuario(nome="Atendente 2", email="atendente2@labflow.com", senha_hash=senha_hash, perfil="ATENDENTE"),
-            Usuario(nome="Gestor", email="gestor@labflow.com", senha_hash=senha_hash, perfil="GESTOR"),
-        ])
-        db.session.commit()
+        _popular_usuarios()
         yield app
         db.session.remove()
         db.drop_all()
+
+
+@pytest.fixture()
+def app_arquivo(tmp_path):
+    """App com SQLite em arquivo, necessário para testar várias conexões ao mesmo tempo."""
+    app = create_app(_config(f"sqlite:///{tmp_path / 'teste.db'}"))
+    with app.app_context():
+        db.create_all()
+        _popular_usuarios()
+        yield app
+        db.session.remove()
+        db.drop_all()
+        db.engine.dispose()
 
 
 @pytest.fixture()
