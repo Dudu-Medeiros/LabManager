@@ -120,15 +120,24 @@ class SenhaService:
         if not novo_estado:
             return None, "Informe o campo 'estado' para realizar a transição.", 400
 
-        valido, estado_normalizado, erro = validar_transicao(senha.estado_atual, novo_estado)
+        # Guarda a versão e o estado lidos agora: a gravação só vale se nada mudou até lá (lock otimista).
+        versao_lida = senha.versao
+        estado_lido = senha.estado_atual
+
+        valido, estado_normalizado, erro = validar_transicao(estado_lido, novo_estado)
         if not valido:
             return None, erro, 422
 
-        senha_atualizada = SenhaRepository.atualizar_estado_com_historico(
-            senha=senha,
+        gravou = SenhaRepository.atualizar_estado_com_historico(
+            senha_id=senha.id,
+            versao_lida=versao_lida,
+            estado_lido=estado_lido,
             novo_estado=estado_normalizado,
             usuario_id=usuario_id,
             guiche=guiche
         )
+        if not gravou:
+            return None, "Conflito: a senha foi alterada por outro atendente. Atualize e tente novamente.", 409
 
+        senha_atualizada = SenhaRepository.buscar_por_id(senha.id)
         return SenhaService._serializar(senha_atualizada, incluir_historico=True), None, 200

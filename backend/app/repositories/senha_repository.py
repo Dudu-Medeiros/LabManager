@@ -58,39 +58,17 @@ class SenhaRepository:
     def marcar_como_chamada(senha, usuario_id, guiche=None):
         """Move a senha de AGUARDANDO para CHAMADA usando lock otimista.
 
-        O UPDATE só acontece se a versão e o estado ainda forem os que foram
-        lidos. Se outro atendente chamou a mesma senha antes, nenhuma linha é
-        alterada e o método devolve False para que o serviço escolha a próxima.
+        Se outro atendente chamou a mesma senha antes, nenhuma linha é alterada
+        e o método devolve False para que o serviço escolha a próxima.
         """
-        valores = {
-            "estado_atual": "CHAMADA",
-            "usuario_id": usuario_id,
-            "versao": senha.versao + 1
-        }
-        if guiche is not None:
-            valores["guiche"] = guiche
-
-        resultado = db.session.execute(
-            update(Senha)
-            .where(
-                Senha.id == senha.id,
-                Senha.versao == senha.versao,
-                Senha.estado_atual == "AGUARDANDO"
-            )
-            .values(**valores)
-        )
-
-        if resultado.rowcount == 0:
-            db.session.rollback()
-            return False
-
-        db.session.add(HistoricoEstado(
+        return SenhaRepository.atualizar_estado_com_historico(
             senha_id=senha.id,
-            estado="CHAMADA",
-            usuario_id=usuario_id
-        ))
-        db.session.commit()
-        return True
+            versao_lida=senha.versao,
+            estado_lido="AGUARDANDO",
+            novo_estado="CHAMADA",
+            usuario_id=usuario_id,
+            guiche=guiche
+        )
 
     @staticmethod
     def criar_com_historico(senha):
@@ -107,19 +85,40 @@ class SenhaRepository:
         return senha
 
     @staticmethod
-    def atualizar_estado_com_historico(senha, novo_estado, usuario_id, guiche=None):
-        senha.estado_atual = novo_estado
-        senha.usuario_id = usuario_id
-        senha.versao += 1
+    def atualizar_estado_com_historico(senha_id, versao_lida, estado_lido, novo_estado, usuario_id, guiche=None):
+        """Troca o estado da senha com lock otimista (UPDATE ... WHERE id AND versao AND estado).
 
+        A mudança só é gravada se a senha ainda estiver na versão e no estado
+        que foram lidos antes da validação. Se outro atendente alterou a senha
+        nesse meio tempo, a versão já mudou, nenhuma linha é atualizada e o
+        método devolve False (sem gravar histórico). Em caso de sucesso devolve True.
+        """
+        valores = {
+            "estado_atual": novo_estado,
+            "usuario_id": usuario_id,
+            "versao": versao_lida + 1
+        }
         if guiche is not None:
-            senha.guiche = guiche
+            valores["guiche"] = guiche
 
-        registro_historico = HistoricoEstado(
-            senha_id=senha.id,
+        resultado = db.session.execute(
+            update(Senha)
+            .where(
+                Senha.id == senha_id,
+                Senha.versao == versao_lida,
+                Senha.estado_atual == estado_lido
+            )
+            .values(**valores)
+        )
+
+        if resultado.rowcount == 0:
+            db.session.rollback()
+            return False
+
+        db.session.add(HistoricoEstado(
+            senha_id=senha_id,
             estado=novo_estado,
             usuario_id=usuario_id
-        )
-        db.session.add(registro_historico)
+        ))
         db.session.commit()
-        return senha
+        return True
