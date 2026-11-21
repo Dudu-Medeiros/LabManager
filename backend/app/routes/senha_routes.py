@@ -18,6 +18,22 @@ def emitir_senha():
 
     return jsonify(senha), 201
 
+@senha_bp.route("/chamar-proximo", methods=["POST"])
+@perfil_requerido("ATENDENTE", "GESTOR")
+def chamar_proximo():
+    dados = request.get_json(silent=True) or {}
+    usuario_id = int(get_jwt_identity())
+
+    senha, erro, status = SenhaService.chamar_proxima(
+        usuario_id=usuario_id,
+        guiche=dados.get("guiche")
+    )
+
+    if erro:
+        return jsonify({"erro": erro}), status
+
+    return jsonify(senha), status
+
 @senha_bp.route("/<int:senha_id>", methods=["GET"])
 @perfil_requerido("ATENDENTE", "GESTOR")
 def obter_senha(senha_id):

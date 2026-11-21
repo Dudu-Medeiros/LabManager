@@ -6,6 +6,20 @@ from app.services.maquina_estados import validar_transicao
 TIPOS_VALIDOS = {"SP", "SE", "SG"}
 FUSO_BR = timezone(timedelta(hours=-3))
 
+# Tentativas de chamar a próxima senha quando outro atendente chama a mesma antes (lock otimista).
+MAX_TENTATIVAS_CHAMADA = 5
+
+def ordem_de_busca(ultimo_tipo_chamado):
+    """Define em que ordem as filas são consultadas para a próxima chamada.
+
+    Ciclo do edital: [SP] -> [SE ou SG] -> [SP] -> [SE ou SG].
+    Entre SE e SG, SE tem prioridade. Se a fila da vez estiver vazia, a busca
+    segue para as demais, então nunca fica ninguém esperando por uma fila vazia.
+    """
+    if ultimo_tipo_chamado == "SP":
+        return ["SE", "SG", "SP"]
+    return ["SP", "SE", "SG"]
+
 class SenhaService:
     @staticmethod
     def _serializar(senha, incluir_historico=False):
@@ -72,6 +86,30 @@ class SenhaService:
         if not senha:
             return None, "Senha não encontrada."
         return SenhaService._serializar(senha, incluir_historico=True), None
+
+    @staticmethod
+    def chamar_proxima(usuario_id, guiche=None):
+        prefixo_data = datetime.now(FUSO_BR).strftime("%y%m%d") + "-"
+
+        for _ in range(MAX_TENTATIVAS_CHAMADA):
+            # Relê a última chamada a cada tentativa: outro atendente pode ter chamado uma senha nesse meio tempo.
+            ultima_chamada = SenhaRepository.buscar_ultima_chamada_do_dia(prefixo_data)
+            ordem = ordem_de_busca(ultima_chamada.tipo if ultima_chamada else None)
+
+            candidata = None
+            for tipo in ordem:
+                candidata = SenhaRepository.buscar_proxima_aguardando(tipo, prefixo_data)
+                if candidata:
+                    break
+
+            if not candidata:
+                return None, "Não há senhas aguardando atendimento.", 404
+
+            if SenhaRepository.marcar_como_chamada(candidata, usuario_id, guiche):
+                senha = SenhaRepository.buscar_por_id(candidata.id)
+                return SenhaService._serializar(senha, incluir_historico=True), None, 200
+
+        return None, "Não foi possível chamar a próxima senha. Tente novamente.", 409
 
     @staticmethod
     def transicionar_estado(senha_id, novo_estado, usuario_id, guiche=None):
