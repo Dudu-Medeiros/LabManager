@@ -18,6 +18,10 @@ Banco de Dados
 *.sqlite3
 labflow.db
 
+# Logs da aplicacao
+logs/
+*.log
+
 
 FRONTEND (node / React)
 node_modules/

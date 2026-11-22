@@ -9,6 +9,7 @@ from config import Config
 def _config(uri):
     class TestConfig(Config):
         TESTING = True
+        LOG_TO_FILE = False
         SQLALCHEMY_DATABASE_URI = uri
         JWT_SECRET_KEY = "chave-de-teste-com-tamanho-suficiente-para-hmac"
     return TestConfig

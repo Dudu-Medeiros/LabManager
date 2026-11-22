@@ -1,4 +1,6 @@
 from flask import Flask, jsonify
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
@@ -13,6 +15,10 @@ jwt = JWTManager()
 def create_app(config_class=Config):
     app = Flask(__name__)
     app.config.from_object(config_class)
+
+    # Logs da aplicacao (console + arquivo com rotacao)
+    from .logging_config import configurar_logging
+    configurar_logging(app)
 
     # Vincula as extensoes ao app
     CORS(app)
@@ -35,10 +41,22 @@ def create_app(config_class=Config):
     app.register_blueprint(auth_bp)
     app.register_blueprint(senha_bp)
     app.register_blueprint(relatorio_bp)
-    
+
+    # Tratamento global de erros: respostas JSON padronizadas e sem detalhes tecnicos
+    from .errors import registrar_tratadores_de_erro
+    registrar_tratadores_de_erro(app, jwt)
+
     # Rota de Health Check para monitoramento e recuperacao de desastres
     @app.route('/health', methods=['GET'])
     def health_check():
+        try:
+            db.session.execute(text('SELECT 1'))
+        except SQLAlchemyError:
+            app.logger.error('Health check: o banco de dados nao respondeu.', exc_info=True)
+            return jsonify({
+                'status': 'indisponivel',
+                'message': 'API no ar, mas o banco de dados nao respondeu.'
+            }), 503
         return jsonify({
             'status': 'ok', 
             'message': 'API do LabManager rodando com sucesso!'
