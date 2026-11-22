@@ -228,13 +228,6 @@ Toda a documentação técnica e os diagramas em Mermaid estão organizados em `
 - [x] Documentação interativa Swagger/OpenAPI (`/apidocs`), health check (`/health`), logs com rotação e script de backup (`backup_db.py`).
 - [x] Integração completa com front-end React/TypeScript (Totem, Painel, Guichê e Relatórios).
 
-### Não Implementadas / Melhorias Futuras
-- [ ] Empacotamento e orquestração via Docker / Docker Compose.
-- [ ] Pipeline de integração contínua (CI/CD) via GitHub Actions.
-- [ ] Tela dedicada no front-end para cadastro/edição de usuários (funcionalidade disponível e testada via API REST em `/api/auth/usuarios`).
-- [ ] Exportação direta dos relatórios em arquivos PDF/CSV pelo navegador.
-- [ ] Execução validada em servidor MySQL 8.0 dedicado (ambiente padrão entregue em SQLite; basta apontar `DATABASE_URL` para migrar).
-
 ## Declaração de Uso de Inteligência Artificial
 
 Conforme a Seção 9.5 do edital, declaramos que ferramentas de inteligência artificial generativa foram utilizadas como apoio durante o desenvolvimento deste projeto (auxílio na estruturação de componentes, revisão de conformidade com requisitos, elaboração de testes e documentação). Todos os integrantes acompanharam o desenvolvimento, compreendem a arquitetura adotada e estão aptos a explicar integralmente o código-fonte entregue.
