@@ -9,7 +9,7 @@ def perfil_requerido(*perfis_permitidos):
             verify_jwt_in_request()
             claims = get_jwt()
             if claims.get("perfil") not in perfis_permitidos:
-                return jsonify({"erro": "Acesso negado. Permissão insuficiente."}), 403
+                return jsonify({"erro": "Acesso negado. Permissão insuficiente.", "codigo": "ACESSO_NEGADO"}), 403
             return fn(*args, **kwargs)
         return decorator
     return wrapper
