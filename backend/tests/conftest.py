@@ -70,6 +70,11 @@ def auth2(client):
 
 
 @pytest.fixture()
+def auth_gestor(client):
+    return _login(client, "gestor@labflow.com")
+
+
+@pytest.fixture()
 def emitir_aguardando(client, auth):
     """Emite uma senha do tipo informado e já a coloca na fila (estado AGUARDANDO)."""
     def _emitir(tipo):
