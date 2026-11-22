@@ -31,8 +31,10 @@ def create_app(config_class=Config):
     # Registra os blueprints de rotas
     from .routes.auth_routes import auth_bp
     from .routes.senha_routes import senha_bp
+    from .routes.relatorio_routes import relatorio_bp
     app.register_blueprint(auth_bp)
     app.register_blueprint(senha_bp)
+    app.register_blueprint(relatorio_bp)
     
     # Rota de Health Check para monitoramento e recuperacao de desastres
     @app.route('/health', methods=['GET'])
