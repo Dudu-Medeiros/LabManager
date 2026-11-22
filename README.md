@@ -7,6 +7,7 @@ Projeto Final integrado das disciplinas de **Back End Frameworks** (Prof. Eduard
 ## Equipe
 
 | Integrante | Matrícula |
+| :--- | :--- |
 | Eduardo Guilherme | 01802828 |
 | Bruno André | 01554553 |
 
