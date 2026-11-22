@@ -4,6 +4,7 @@ from app.models.senha import Senha
 from app.models.historico import HistoricoEstado
 from app.models.fila import Fila
 
+
 class SenhaRepository:
     @staticmethod
     def buscar_por_id(senha_id):
@@ -24,11 +25,6 @@ class SenhaRepository:
 
     @staticmethod
     def buscar_ultima_chamada_do_dia(prefixo_data):
-        """Retorna a última senha do dia que foi chamada pela primeira vez.
-
-        Só conta o estado CHAMADA: uma rechamada (CHAMADA_NOVAMENTE) é o mesmo
-        paciente e não deve alterar o ciclo de alternância das filas.
-        """
         return (
             Senha.query
             .join(HistoricoEstado, HistoricoEstado.senha_id == Senha.id)
@@ -42,7 +38,6 @@ class SenhaRepository:
 
     @staticmethod
     def buscar_proxima_aguardando(tipo, prefixo_data):
-        """Retorna a senha mais antiga (ordem de emissão) do tipo que está aguardando."""
         return (
             Senha.query
             .filter(
@@ -56,11 +51,6 @@ class SenhaRepository:
 
     @staticmethod
     def marcar_como_chamada(senha, usuario_id, guiche=None):
-        """Move a senha de AGUARDANDO para CHAMADA usando lock otimista.
-
-        Se outro atendente chamou a mesma senha antes, nenhuma linha é alterada
-        e o método devolve False para que o serviço escolha a próxima.
-        """
         return SenhaRepository.atualizar_estado_com_historico(
             senha_id=senha.id,
             versao_lida=senha.versao,
@@ -86,13 +76,6 @@ class SenhaRepository:
 
     @staticmethod
     def atualizar_estado_com_historico(senha_id, versao_lida, estado_lido, novo_estado, usuario_id, guiche=None):
-        """Troca o estado da senha com lock otimista (UPDATE ... WHERE id AND versao AND estado).
-
-        A mudança só é gravada se a senha ainda estiver na versão e no estado
-        que foram lidos antes da validação. Se outro atendente alterou a senha
-        nesse meio tempo, a versão já mudou, nenhuma linha é atualizada e o
-        método devolve False (sem gravar histórico). Em caso de sucesso devolve True.
-        """
         valores = {
             "estado_atual": novo_estado,
             "usuario_id": usuario_id,
@@ -122,3 +105,41 @@ class SenhaRepository:
         ))
         db.session.commit()
         return True
+
+    @staticmethod
+    def listar_aguardando_do_dia(prefixo_data):
+        return (
+            Senha.query
+            .filter(
+                Senha.estado_atual == "AGUARDANDO",
+                Senha.numero.like(f"{prefixo_data}%")
+            )
+            .order_by(Senha.id.asc())
+            .all()
+        )
+
+    @staticmethod
+    def listar_em_andamento_do_dia(prefixo_data):
+        return (
+            Senha.query
+            .filter(
+                Senha.estado_atual.in_(["CHAMADA", "CHAMADA_NOVAMENTE", "EM_ATENDIMENTO"]),
+                Senha.numero.like(f"{prefixo_data}%")
+            )
+            .order_by(Senha.id.desc())
+            .all()
+        )
+
+    @staticmethod
+    def listar_ultimas_chamadas_do_dia(prefixo_data, limite=6):
+        return (
+            db.session.query(HistoricoEstado, Senha)
+            .join(Senha, HistoricoEstado.senha_id == Senha.id)
+            .filter(
+                Senha.numero.like(f"{prefixo_data}%"),
+                HistoricoEstado.estado.in_(["CHAMADA", "CHAMADA_NOVAMENTE"])
+            )
+            .order_by(HistoricoEstado.id.desc())
+            .limit(limite)
+            .all()
+        )

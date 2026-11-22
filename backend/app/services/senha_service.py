@@ -5,20 +5,14 @@ from app.services.maquina_estados import validar_transicao
 
 TIPOS_VALIDOS = {"SP", "SE", "SG"}
 FUSO_BR = timezone(timedelta(hours=-3))
-
-# Tentativas de chamar a próxima senha quando outro atendente chama a mesma antes (lock otimista).
 MAX_TENTATIVAS_CHAMADA = 5
 
-def ordem_de_busca(ultimo_tipo_chamado):
-    """Define em que ordem as filas são consultadas para a próxima chamada.
 
-    Ciclo do edital: [SP] -> [SE ou SG] -> [SP] -> [SE ou SG].
-    Entre SE e SG, SE tem prioridade. Se a fila da vez estiver vazia, a busca
-    segue para as demais, então nunca fica ninguém esperando por uma fila vazia.
-    """
+def ordem_de_busca(ultimo_tipo_chamado):
     if ultimo_tipo_chamado == "SP":
         return ["SE", "SG", "SP"]
     return ["SP", "SE", "SG"]
+
 
 class SenhaService:
     @staticmethod
@@ -50,7 +44,7 @@ class SenhaService:
         return dados
 
     @staticmethod
-    def emitir_senha(tipo, paciente_id=None):
+    def emitir_senha(tipo, paciente_id=None, entrar_fila=False):
         tipo_normalizado = tipo.strip().upper() if isinstance(tipo, str) else ""
 
         if tipo_normalizado not in TIPOS_VALIDOS:
@@ -78,6 +72,17 @@ class SenhaService:
         )
 
         SenhaRepository.criar_com_historico(nova_senha)
+
+        if entrar_fila:
+            SenhaRepository.atualizar_estado_com_historico(
+                senha_id=nova_senha.id,
+                versao_lida=nova_senha.versao,
+                estado_lido="EMITIDA",
+                novo_estado="AGUARDANDO",
+                usuario_id=None
+            )
+            nova_senha = SenhaRepository.buscar_por_id(nova_senha.id)
+
         return SenhaService._serializar(nova_senha), None
 
     @staticmethod
@@ -92,7 +97,6 @@ class SenhaService:
         prefixo_data = datetime.now(FUSO_BR).strftime("%y%m%d") + "-"
 
         for _ in range(MAX_TENTATIVAS_CHAMADA):
-            # Relê a última chamada a cada tentativa: outro atendente pode ter chamado uma senha nesse meio tempo.
             ultima_chamada = SenhaRepository.buscar_ultima_chamada_do_dia(prefixo_data)
             ordem = ordem_de_busca(ultima_chamada.tipo if ultima_chamada else None)
 
@@ -120,7 +124,6 @@ class SenhaService:
         if not novo_estado:
             return None, "Informe o campo 'estado' para realizar a transição.", 400
 
-        # Guarda a versão e o estado lidos agora: a gravação só vale se nada mudou até lá (lock otimista).
         versao_lida = senha.versao
         estado_lido = senha.estado_atual
 
@@ -141,3 +144,45 @@ class SenhaService:
 
         senha_atualizada = SenhaRepository.buscar_por_id(senha.id)
         return SenhaService._serializar(senha_atualizada, incluir_historico=True), None, 200
+
+    @staticmethod
+    def obter_painel():
+        prefixo_data = datetime.now(FUSO_BR).strftime("%y%m%d") + "-"
+        eventos = SenhaRepository.listar_ultimas_chamadas_do_dia(prefixo_data, limite=6)
+        aguardando = SenhaRepository.listar_aguardando_do_dia(prefixo_data)
+
+        chamadas = [
+            {
+                "evento_id": historico.id,
+                "senha_id": senha.id,
+                "numero": senha.numero,
+                "tipo": senha.tipo,
+                "guiche": senha.guiche or "-",
+                "estado_evento": historico.estado,
+                "estado_atual": senha.estado_atual,
+                "data_hora": historico.data_hora.isoformat()
+            }
+            for historico, senha in eventos
+        ]
+
+        resumo = {"SP": 0, "SE": 0, "SG": 0, "total": len(aguardando)}
+        for senha in aguardando:
+            if senha.tipo in resumo:
+                resumo[senha.tipo] += 1
+
+        return {
+            "chamada_atual": chamadas[0] if chamadas else None,
+            "ultimas_chamadas": chamadas,
+            "aguardando": resumo
+        }
+
+    @staticmethod
+    def obter_fila_atendimento():
+        prefixo_data = datetime.now(FUSO_BR).strftime("%y%m%d") + "-"
+        aguardando = SenhaRepository.listar_aguardando_do_dia(prefixo_data)
+        em_andamento = SenhaRepository.listar_em_andamento_do_dia(prefixo_data)
+
+        return {
+            "aguardando": [SenhaService._serializar(s) for s in aguardando],
+            "em_andamento": [SenhaService._serializar(s, incluir_historico=True) for s in em_andamento]
+        }

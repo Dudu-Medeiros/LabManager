@@ -5,18 +5,32 @@ from app.decorators import perfil_requerido
 
 senha_bp = Blueprint("senhas", __name__, url_prefix="/api/senhas")
 
+
 @senha_bp.route("/emitir", methods=["POST"])
 def emitir_senha():
     dados = request.get_json() or {}
     senha, erro = SenhaService.emitir_senha(
         tipo=dados.get("tipo"),
-        paciente_id=dados.get("paciente_id")
+        paciente_id=dados.get("paciente_id"),
+        entrar_fila=bool(dados.get("entrar_fila", False))
     )
 
     if erro:
         return jsonify({"erro": erro}), 400
 
     return jsonify(senha), 201
+
+
+@senha_bp.route("/painel", methods=["GET"])
+def obter_painel():
+    return jsonify(SenhaService.obter_painel()), 200
+
+
+@senha_bp.route("/fila", methods=["GET"])
+@perfil_requerido("ATENDENTE", "GESTOR")
+def obter_fila():
+    return jsonify(SenhaService.obter_fila_atendimento()), 200
+
 
 @senha_bp.route("/chamar-proximo", methods=["POST"])
 @perfil_requerido("ATENDENTE", "GESTOR")
@@ -34,6 +48,7 @@ def chamar_proximo():
 
     return jsonify(senha), status
 
+
 @senha_bp.route("/<int:senha_id>", methods=["GET"])
 @perfil_requerido("ATENDENTE", "GESTOR")
 def obter_senha(senha_id):
@@ -41,6 +56,7 @@ def obter_senha(senha_id):
     if erro:
         return jsonify({"erro": erro}), 404
     return jsonify(senha), 200
+
 
 @senha_bp.route("/<int:senha_id>/estado", methods=["PATCH"])
 @perfil_requerido("ATENDENTE", "GESTOR")
