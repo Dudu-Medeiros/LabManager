@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowUpRight, Headphones, Monitor, Ticket } from 'lucide-react'
+import { ArrowUpRight, BarChart3, Headphones, Monitor, Ticket } from 'lucide-react'
 import { api } from '../services/api'
 import { useAuth } from '../contexts/AuthContext'
 import { BrandLogo } from '../components/BrandLogo'
@@ -17,6 +17,8 @@ export function Home() {
       .then(() => setStatus('online'))
       .catch(() => setStatus('offline'))
   }, [])
+
+  const ehGestor = autenticado && usuario?.perfil === 'GESTOR'
 
   const modulos = [
     {
@@ -37,13 +39,15 @@ export function Home() {
     },
     {
       codigo: '03',
-      titulo: autenticado ? 'Operação de Guichê' : 'Acesso Interno',
+      titulo: ehGestor ? 'Painel Gerencial' : autenticado ? 'Operação de Guichê' : 'Acesso Interno',
       ambiente: autenticado ? `${usuario?.perfil} · Ativo` : 'Equipe · Restrito',
-      descricao: autenticado
-        ? `Sessão aberta como ${usuario?.nome}. Retomar chamadas no guichê.`
-        : 'Autenticação para atendentes e gestores controlarem a fila de atendimento.',
-      rota: autenticado ? '/atendimento' : '/login',
-      icone: Headphones,
+      descricao: ehGestor
+        ? `Sessão aberta como ${usuario?.nome}. Acessar relatórios, KPIs e auditoria.`
+        : autenticado
+          ? `Sessão aberta como ${usuario?.nome}. Retomar chamadas no guichê.`
+          : 'Autenticação para atendentes e gestores controlarem a fila de atendimento.',
+      rota: ehGestor ? '/relatorios' : autenticado ? '/atendimento' : '/login',
+      icone: ehGestor ? BarChart3 : Headphones,
     },
   ]
 

@@ -4,7 +4,7 @@ import { Totem } from '../pages/Totem'
 import { Painel } from '../pages/Painel'
 import { Login } from '../pages/Login'
 import { Atendimento } from '../pages/Atendimento'
-import { PlaceholderPage } from '../pages/PlaceholderPage'
+import { Relatorios } from '../pages/Relatorios'
 import { ProtectedRoute } from '../components/ProtectedRoute'
 
 export function AppRoutes() {
@@ -27,7 +27,7 @@ export function AppRoutes() {
           path="/relatorios"
           element={
             <ProtectedRoute perfis={['GESTOR']}>
-              <PlaceholderPage titulo="Relatórios" />
+              <Relatorios />
             </ProtectedRoute>
           }
         />
