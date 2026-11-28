@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Lock, Mail } from 'lucide-react'
@@ -8,12 +8,18 @@ import { BrandLogo } from '../components/BrandLogo'
 
 export function Login() {
   const navigate = useNavigate()
-  const { login } = useAuth()
+  const { login, usuario } = useAuth()
 
   const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState('')
   const [carregando, setCarregando] = useState(false)
+
+  useEffect(() => {
+    if (!usuario) return
+    const destino = usuario.perfil === 'GESTOR' ? '/relatorios' : '/atendimento'
+    navigate(destino, { replace: true })
+  }, [usuario, navigate])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -22,7 +28,6 @@ export function Login() {
 
     try {
       await login(email.trim(), senha)
-      navigate('/atendimento', { replace: true })
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.erro) {
         setErro(err.response.data.erro)
@@ -141,7 +146,7 @@ export function Login() {
                 disabled={carregando}
                 className="w-full rounded-lg bg-brand-800 py-3 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60 transition cursor-pointer mt-2"
               >
-                {carregando ? 'Validando acesso...' : 'Acessar guichê'}
+                {carregando ? 'Validando acesso...' : 'Acessar sistema'}
               </button>
             </form>
           </div>

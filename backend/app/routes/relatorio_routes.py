@@ -36,3 +36,14 @@ def auditoria():
         pagina=request.args.get("pagina"),
         por_pagina=request.args.get("por_pagina"),
     ))
+
+
+@relatorio_bp.route("/auditoria/senhas", methods=["GET"])
+@perfil_requerido("GESTOR")
+def auditoria_senhas():
+    return _responder(RelatorioService.auditoria_senhas(
+        data=request.args.get("data"),
+        mes=request.args.get("mes"),
+        usuario_id=request.args.get("usuario_id"),
+        numero=request.args.get("numero"),
+    ))

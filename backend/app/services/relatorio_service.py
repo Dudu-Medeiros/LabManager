@@ -16,9 +16,13 @@ def _hoje():
 
 
 def _para_utc(dia_local):
-    """Meia-noite (horário de Brasília) de um dia, convertida para UTC sem fuso,
-    que é como o banco guarda data_hora."""
     return datetime.combine(dia_local, time.min, tzinfo=FUSO_BR).astimezone(UTC).replace(tzinfo=None)
+
+
+def _formatar_br(dt):
+    if not dt:
+        return None
+    return dt.replace(tzinfo=UTC).astimezone(FUSO_BR).isoformat()
 
 
 def _primeiro_dia_do_mes_seguinte(dia):
@@ -80,15 +84,15 @@ def _media(duracoes):
     return {"amostras": len(duracoes), "segundos": round(media, 1), "minutos": round(media / 60, 2)}
 
 
-def _tempos_medios(marcos):
-    """TM de atendimento: EM_ATENDIMENTO -> ATENDIDA.
-    Tempo de espera: AGUARDANDO -> primeira CHAMADA.
-    Só entram senhas que têm os dois marcos (as demais não têm duração definida)."""
+def _indexar_marcos(marcos):
     por_senha = {}
     for senha_id, tipo, estado, quando in marcos:
         info = por_senha.setdefault(senha_id, {"tipo": tipo})
-        info.setdefault(estado, quando)  # guarda a primeira ocorrência de cada estado
+        info.setdefault(estado, quando)
+    return por_senha
 
+
+def _tempos_medios(por_senha):
     atendimento = defaultdict(list)
     espera = defaultdict(list)
     for info in por_senha.values():
@@ -122,20 +126,88 @@ def _por_dia(senhas):
     return resultado
 
 
+def _montar_detalhado(detalhes, marcos_por_senha):
+    lista = []
+    for item in detalhes:
+        marcos = marcos_por_senha.get(item.id, {})
+        foi_atendida = item.estado_atual == "ATENDIDA"
+        data_atendimento = marcos.get("EM_ATENDIMENTO") or marcos.get("ATENDIDA")
+
+        lista.append({
+            "senha_id": item.id,
+            "numero": item.numero,
+            "tipo": item.tipo,
+            "estado_atual": item.estado_atual,
+            "data_emissao": _formatar_br(item.data_emissao),
+            "data_atendimento": _formatar_br(data_atendimento) if foi_atendida else None,
+            "guiche": item.guiche if foi_atendida else None,
+        })
+    return lista
+
+
+def _montar_indicadores(totais, detalhes):
+    emitidas = totais["emitidas"]
+    taxa_atendimento = round((totais["atendidas"] / emitidas) * 100, 1) if emitidas else 0.0
+    taxa_nao_comparecimento = round((totais["nao_compareceu"] / emitidas) * 100, 1) if emitidas else 0.0
+
+    por_guiche = {}
+    por_atendente = {}
+
+    for item in detalhes:
+        if item.guiche:
+            g = por_guiche.setdefault(
+                item.guiche,
+                {"guiche": item.guiche, "atendidas": 0, "nao_compareceu": 0, "total": 0}
+            )
+            g["total"] += 1
+            if item.estado_atual == "ATENDIDA":
+                g["atendidas"] += 1
+            elif item.estado_atual == "NAO_COMPARECEU":
+                g["nao_compareceu"] += 1
+
+        if item.usuario_id is not None:
+            a = por_atendente.setdefault(
+                item.usuario_id,
+                {
+                    "usuario_id": item.usuario_id,
+                    "atendente": item.usuario_nome or f"Usuário #{item.usuario_id}",
+                    "atendidas": 0,
+                    "nao_compareceu": 0,
+                    "total": 0,
+                }
+            )
+            a["total"] += 1
+            if item.estado_atual == "ATENDIDA":
+                a["atendidas"] += 1
+            elif item.estado_atual == "NAO_COMPARECEU":
+                a["nao_compareceu"] += 1
+
+    return {
+        "taxa_atendimento_percentual": taxa_atendimento,
+        "taxa_nao_comparecimento_percentual": taxa_nao_comparecimento,
+        "por_guiche": sorted(por_guiche.values(), key=lambda x: x["guiche"]),
+        "por_atendente": sorted(por_atendente.values(), key=lambda x: x["atendidas"], reverse=True),
+    }
+
+
 class RelatorioService:
     @staticmethod
     def _montar(periodo, prefixo, incluir_por_dia=False):
         senhas = RelatorioRepository.listar_senhas_por_prefixo(prefixo)
+        detalhes = RelatorioRepository.listar_detalhes_senhas_por_prefixo(prefixo)
         marcos = RelatorioRepository.listar_marcos_por_prefixo(
-            prefixo, ("AGUARDANDO", "CHAMADA", "EM_ATENDIMENTO", "ATENDIDA")
+            prefixo, ("AGUARDANDO", "CHAMADA", "CHAMADA_NOVAMENTE", "EM_ATENDIMENTO", "ATENDIDA")
         )
+        marcos_por_senha = _indexar_marcos(marcos)
         por_tipo, totais = _contar(senhas)
 
         relatorio = {
             "periodo": periodo,
             "totais": totais,
             "por_tipo": por_tipo,
-            "tempo_medio": _tempos_medios(marcos),
+            "tempo_medio": _tempos_medios(marcos_por_senha),
+            "indicadores": _montar_indicadores(totais, detalhes),
+            "detalhado": _montar_detalhado(detalhes, marcos_por_senha),
         }
         if incluir_por_dia:
             relatorio["por_dia"] = _por_dia(senhas)
@@ -164,6 +236,67 @@ class RelatorioService:
 
         periodo = {"tipo": "mensal", "mes": dia.strftime("%Y-%m")}
         return RelatorioService._montar(periodo, dia.strftime("%y%m"), incluir_por_dia=True), None, 200
+
+    @staticmethod
+    def auditoria_senhas(data=None, mes=None, usuario_id=None, numero=None):
+        if data and mes:
+            return None, "Informe 'data' ou 'mes', não os dois.", 400
+
+        if mes:
+            primeiro, erro = _ler_mes(mes)
+            if erro:
+                return None, erro, 400
+            prefixo = primeiro.strftime("%y%m")
+            periodo = {"tipo": "mensal", "mes": primeiro.strftime("%Y-%m")}
+        else:
+            if data:
+                primeiro, erro = _ler_dia(data)
+                if erro:
+                    return None, erro, 400
+            else:
+                primeiro = _hoje()
+            prefixo = primeiro.strftime("%y%m%d") + "-"
+            periodo = {"tipo": "diario", "data": primeiro.isoformat()}
+
+        if usuario_id not in (None, ""):
+            usuario_id, erro = _ler_inteiro(usuario_id, "usuario_id", 1)
+            if erro:
+                return None, erro, 400
+        else:
+            usuario_id = None
+
+        detalhes = RelatorioRepository.listar_detalhes_senhas_por_prefixo(prefixo)
+        marcos = RelatorioRepository.listar_marcos_por_prefixo(
+            prefixo, ("CHAMADA", "CHAMADA_NOVAMENTE", "EM_ATENDIMENTO", "ATENDIDA")
+        )
+        marcos_por_senha = _indexar_marcos(marcos)
+
+        registros = []
+        for item in detalhes:
+            if usuario_id is not None and item.usuario_id != usuario_id:
+                continue
+            if numero and item.numero != numero:
+                continue
+
+            marcos_item = marcos_por_senha.get(item.id, {})
+            registros.append({
+                "senha_id": item.id,
+                "senha": item.numero,
+                "tipo": item.tipo,
+                "estado_atual": item.estado_atual,
+                "atendente": item.usuario_nome,
+                "guiche": item.guiche,
+                "primeira_chamada": _formatar_br(marcos_item.get("CHAMADA")),
+                "segunda_chamada": _formatar_br(marcos_item.get("CHAMADA_NOVAMENTE")),
+                "inicio_atendimento": _formatar_br(marcos_item.get("EM_ATENDIMENTO")),
+                "fim_atendimento": _formatar_br(marcos_item.get("ATENDIDA")),
+            })
+
+        return {
+            "periodo": periodo,
+            "total": len(registros),
+            "registros": registros,
+        }, None, 200
 
     @staticmethod
     def auditoria(data=None, mes=None, usuario_id=None, estado=None, numero=None, pagina=None, por_pagina=None):
@@ -227,7 +360,7 @@ class RelatorioService:
                 "senha_tipo": linha.senha_tipo,
                 "guiche": linha.guiche,
                 "estado": linha.estado,
-                "data_hora": linha.data_hora.replace(tzinfo=UTC).astimezone(FUSO_BR).isoformat(),
+                "data_hora": _formatar_br(linha.data_hora),
                 "usuario_id": linha.usuario_id,
                 "usuario_nome": linha.usuario_nome,
             }

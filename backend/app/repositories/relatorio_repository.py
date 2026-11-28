@@ -8,8 +8,6 @@ from app.models.usuario import Usuario
 class RelatorioRepository:
     @staticmethod
     def listar_senhas_por_prefixo(prefixo):
-        """Senhas emitidas no período. O número da senha começa com YYMMDD, então
-        o prefixo 'YYMMDD-' seleciona um dia e 'YYMM' seleciona um mês."""
         consulta = (
             select(Senha.numero, Senha.tipo, Senha.estado_atual)
             .where(Senha.numero.like(f"{prefixo}%"))
@@ -17,9 +15,27 @@ class RelatorioRepository:
         return db.session.execute(consulta).all()
 
     @staticmethod
+    def listar_detalhes_senhas_por_prefixo(prefixo):
+        consulta = (
+            select(
+                Senha.id,
+                Senha.numero,
+                Senha.tipo,
+                Senha.estado_atual,
+                Senha.data_emissao,
+                Senha.guiche,
+                Senha.usuario_id,
+                Usuario.nome.label("usuario_nome")
+            )
+            .select_from(Senha)
+            .outerjoin(Usuario, Usuario.id == Senha.usuario_id)
+            .where(Senha.numero.like(f"{prefixo}%"))
+            .order_by(Senha.id.asc())
+        )
+        return db.session.execute(consulta).all()
+
+    @staticmethod
     def listar_marcos_por_prefixo(prefixo, estados):
-        """Registros de histórico (em ordem cronológica) das senhas emitidas no período,
-        limitados aos estados informados. Usado para calcular tempos médios."""
         consulta = (
             select(HistoricoEstado.senha_id, Senha.tipo, HistoricoEstado.estado, HistoricoEstado.data_hora)
             .join(Senha, Senha.id == HistoricoEstado.senha_id)
@@ -30,8 +46,6 @@ class RelatorioRepository:
 
     @staticmethod
     def buscar_auditoria(inicio_utc, fim_utc, usuario_id=None, estado=None, numero=None, limite=50, deslocamento=0):
-        """Ações registradas no histórico entre inicio_utc (inclusive) e fim_utc (exclusive),
-        da mais recente para a mais antiga. Devolve (linhas, total sem paginação)."""
         filtros = [
             HistoricoEstado.data_hora >= inicio_utc,
             HistoricoEstado.data_hora < fim_utc
